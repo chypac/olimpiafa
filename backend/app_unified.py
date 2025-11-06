@@ -5,7 +5,11 @@ import csv
 from datetime import datetime
 import json
 
-app = Flask(__name__, static_folder='../frontend/build', static_url_path='')
+# Определяем путь к build папке
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BUILD_DIR = os.path.join(BASE_DIR, '..', 'frontend', 'build')
+
+app = Flask(__name__, static_folder=BUILD_DIR, static_url_path='')
 CORS(app)
 
 QUESTIONS_FILE = "questions.txt"
