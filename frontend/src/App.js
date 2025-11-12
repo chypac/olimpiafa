@@ -85,8 +85,16 @@ function App() {
     document.body.style.backgroundImage = `url(${backgroundImage})`;
     // Пытаемся восстановить прогресс при загрузке
     restoreProgress();
+    
+    // Пингуем сервер каждые 10 минут чтобы он не заснул
+    const keepAliveInterval = setInterval(() => {
+      axios.get(`${API_URL}/questions`)
+        .catch(error => console.log('Keep-alive ping failed:', error));
+    }, 10 * 60 * 1000); // 10 минут
+    
     return () => {
       document.body.style.backgroundImage = '';
+      clearInterval(keepAliveInterval);
     };
   }, []);
 
