@@ -25,6 +25,8 @@ function App() {
   const [currentAnswer, setCurrentAnswer] = useState('');
   const [userId, setUserId] = useState('');
   const [showIdForm, setShowIdForm] = useState(true);
+  const [totalTime, setTotalTime] = useState(0); // Общий таймер олимпиады в секундах
+  const [startTime, setStartTime] = useState(null); // Время начала олимпиады
 
   // Функция сохранения прогресса в localStorage и на сервере
   const saveProgress = async () => {
@@ -97,6 +99,34 @@ function App() {
       clearInterval(keepAliveInterval);
     };
   }, []);
+
+  // Heartbeat каждые 30 секунд + общий таймер
+  useEffect(() => {
+    if (!showIdForm && userId && !showResult) {
+      // Запускаем общий таймер
+      if (!startTime) {
+        setStartTime(Date.now());
+      }
+      
+      // Heartbeat каждые 30 секунд
+      const heartbeatInterval = setInterval(() => {
+        axios.post(`${API_URL}/heartbeat`, { user_id: userId })
+          .catch(error => console.log('Heartbeat failed:', error));
+      }, 30 * 1000); // 30 секунд
+      
+      // Обновляем общий таймер каждую секунду
+      const timerInterval = setInterval(() => {
+        if (startTime) {
+          setTotalTime(Math.floor((Date.now() - startTime) / 1000));
+        }
+      }, 1000);
+      
+      return () => {
+        clearInterval(heartbeatInterval);
+        clearInterval(timerInterval);
+      };
+    }
+  }, [showIdForm, userId, showResult, startTime]);
 
   // Загрузка вопросов (только после ввода ID)
   useEffect(() => {
@@ -220,9 +250,10 @@ function App() {
     try {
       const response = await axios.post(`${API_URL}/result`, {
         answers: finalAnswers,
-        user_id: userId
+        user_id: userId,
+        total_time: totalTime // Отправляем общее время
       });
-      setResult(response.data);
+      setResult({...response.data, total_time: totalTime});
       setShowResult(true);
       // Очищаем прогресс после завершения теста
       clearProgress();
@@ -312,6 +343,9 @@ function App() {
   }
 
   if (showResult && result) {
+    const totalMinutes = Math.floor(result.total_time / 60);
+    const totalSeconds = result.total_time % 60;
+    
     return (
       <div className="result-container">
         <div className="result-card">
@@ -330,6 +364,13 @@ function App() {
               <div>
                 <div className="stat-value">{result.percent}%</div>
                 <div className="stat-label">Процент</div>
+              </div>
+            </div>
+            <div className="stat">
+              <Clock size={32} />
+              <div>
+                <div className="stat-value">{totalMinutes}:{String(totalSeconds).padStart(2, '0')}</div>
+                <div className="stat-label">Время</div>
               </div>
             </div>
           </div>

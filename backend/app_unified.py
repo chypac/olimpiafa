@@ -18,6 +18,7 @@ RESULTS_JSON_FILE = "results.json"
 VALID_IDS_FILE = "valid_ids.txt"
 USED_IDS_FILE = "used_ids.txt"
 PROGRESS_FILE = "progress.json"
+ACTIVE_SESSIONS_FILE = "active_sessions.txt"
 
 def load_questions_from_txt(filename):
     """Загружает вопросы из текстового файла"""
@@ -146,6 +147,64 @@ def mark_id_as_used(user_id):
     with open(USED_IDS_FILE, 'a', encoding='utf-8') as f:
         f.write(f"{user_id}\n")
 
+def load_active_sessions():
+    """Загружает активные сессии"""
+    if not os.path.exists(ACTIVE_SESSIONS_FILE):
+        return {}
+    sessions = {}
+    with open(ACTIVE_SESSIONS_FILE, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if line and '|' in line:
+                user_id, timestamp_str = line.split('|', 1)
+                sessions[user_id] = datetime.fromisoformat(timestamp_str)
+    return sessions
+
+def save_active_sessions(sessions):
+    """Сохраняет активные сессии"""
+    with open(ACTIVE_SESSIONS_FILE, 'w', encoding='utf-8') as f:
+        for user_id, timestamp in sessions.items():
+            f.write(f"{user_id}|{timestamp.isoformat()}\n")
+
+def clean_dead_sessions(sessions, timeout_minutes=2):
+    """Удаляет мертвые сессии (старше timeout_minutes)"""
+    now = datetime.now()
+    alive_sessions = {}
+    for user_id, timestamp in sessions.items():
+        if (now - timestamp).total_seconds() < timeout_minutes * 60:
+            alive_sessions[user_id] = timestamp
+    return alive_sessions
+
+def add_active_session(user_id):
+    """Добавляет активную сессию"""
+    sessions = load_active_sessions()
+    sessions = clean_dead_sessions(sessions)
+    sessions[user_id] = datetime.now()
+    save_active_sessions(sessions)
+
+def update_session_heartbeat(user_id):
+    """Обновляет heartbeat для сессии"""
+    sessions = load_active_sessions()
+    sessions = clean_dead_sessions(sessions)
+    if user_id in sessions:
+        sessions[user_id] = datetime.now()
+        save_active_sessions(sessions)
+        return True
+    return False
+
+def remove_active_session(user_id):
+    """Удаляет активную сессию"""
+    sessions = load_active_sessions()
+    if user_id in sessions:
+        del sessions[user_id]
+        save_active_sessions(sessions)
+
+def is_session_active(user_id):
+    """Проверяет, активна ли сессия"""
+    sessions = load_active_sessions()
+    sessions = clean_dead_sessions(sessions)
+    return user_id in sessions
+
 def is_id_valid(user_id):
     """Проверяет, валиден ли ID и не использован ли он"""
     valid_ids = load_valid_ids()
@@ -155,7 +214,11 @@ def is_id_valid(user_id):
         return False, "Неверный ID"
     
     if user_id in used_ids:
-        return False, "Этот ID уже был использован"
+        return False, "Этот ID уже был использован. Тест завершен."
+    
+    # Проверяем активные сессии
+    if is_session_active(user_id):
+        return False, "Кто-то уже решает тест под этим ID. Подождите или обратитесь к организатору."
     
     return True, "OK"
 
@@ -166,7 +229,7 @@ questions = load_questions_from_txt(QUESTIONS_FILE)
 if not os.path.exists(RESULTS_FILE):
     with open(RESULTS_FILE, 'w', encoding='utf-8-sig', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['Дата/Время', 'ID Пользователя', 'Баллы', 'Макс. баллы', 'Процент', 'Детали ответов'])
+        writer.writerow(['Дата/Время', 'ID Пользователя', 'Баллы', 'Макс. баллы', 'Процент', 'Время', 'Детали ответов'])
 
 if not os.path.exists(RESULTS_JSON_FILE):
     with open(RESULTS_JSON_FILE, 'w', encoding='utf-8') as f:
@@ -175,20 +238,31 @@ if not os.path.exists(RESULTS_JSON_FILE):
 # API endpoints
 @app.route('/api/validate-id', methods=['POST'])
 def validate_id():
-    """Проверяет валидность ID и сразу блокирует его"""
+    """Проверяет валидность ID и создает активную сессию"""
     data = request.json
     user_id = data.get('user_id', '').strip()
     
     is_valid, message = is_id_valid(user_id)
     
     if is_valid:
-        # Сразу блокируем ID чтобы никто другой не мог его использовать
-        mark_id_as_used(user_id)
+        # Создаем активную сессию (НЕ блокируем навсегда!)
+        add_active_session(user_id)
     
     return jsonify({
         'valid': is_valid,
         'message': message
     })
+
+@app.route('/api/heartbeat', methods=['POST'])
+def heartbeat():
+    """Обновляет heartbeat для активной сессии"""
+    data = request.json
+    user_id = data.get('user_id', '').strip()
+    
+    if update_session_heartbeat(user_id):
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False, 'message': 'Сессия не найдена'}), 404
 
 @app.route('/api/questions', methods=['GET'])
 def get_questions():
@@ -291,6 +365,7 @@ def calculate_result():
     data = request.json
     user_answers = data.get('answers', {})
     user_id = data.get('user_id', 'Неизвестный')
+    total_time = data.get('total_time', 0)  # Время в секундах
 
     total_score = 0
     max_score = sum(q['score'] for q in questions)
@@ -314,6 +389,11 @@ def calculate_result():
 
     percent = (total_score / max_score * 100) if max_score > 0 else 0
 
+    # Форматируем время
+    time_minutes = total_time // 60
+    time_seconds = total_time % 60
+    time_formatted = f"{time_minutes}:{time_seconds:02d}"
+    
     # Сохранение результата в CSV
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     with open(RESULTS_FILE, 'a', encoding='utf-8-sig', newline='') as f:
@@ -324,6 +404,7 @@ def calculate_result():
             total_score,
             max_score,
             round(percent, 1),
+            time_formatted,
             json.dumps(details, ensure_ascii=False)
         ])
     
@@ -340,14 +421,17 @@ def calculate_result():
         'score': total_score,
         'max_score': max_score,
         'percent': round(percent, 1),
+        'time': time_formatted,
+        'time_seconds': total_time,
         'details': details
     })
     
     with open(RESULTS_JSON_FILE, 'w', encoding='utf-8') as f:
         json.dump(all_results, f, ensure_ascii=False, indent=2)
 
-    # Блокируем ID после завершения теста
+    # Блокируем ID НАВСЕГДА и удаляем активную сессию
     mark_id_as_used(user_id)
+    remove_active_session(user_id)
 
     return jsonify({
         'score': total_score,
