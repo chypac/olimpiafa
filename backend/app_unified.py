@@ -17,6 +17,7 @@ RESULTS_FILE = "results.csv"
 RESULTS_JSON_FILE = "results.json"
 VALID_IDS_FILE = "valid_ids.txt"
 USED_IDS_FILE = "used_ids.txt"
+PROGRESS_FILE = "progress.json"
 
 def load_questions_from_txt(filename):
     """Загружает вопросы из текстового файла"""
@@ -174,11 +175,15 @@ if not os.path.exists(RESULTS_JSON_FILE):
 # API endpoints
 @app.route('/api/validate-id', methods=['POST'])
 def validate_id():
-    """Проверяет валидность ID"""
+    """Проверяет валидность ID и сразу блокирует его"""
     data = request.json
     user_id = data.get('user_id', '').strip()
     
     is_valid, message = is_id_valid(user_id)
+    
+    if is_valid:
+        # Сразу блокируем ID чтобы никто другой не мог его использовать
+        mark_id_as_used(user_id)
     
     return jsonify({
         'valid': is_valid,
@@ -220,6 +225,65 @@ def get_hint(question_id):
         return jsonify({'error': 'Invalid question ID'}), 400
 
     return jsonify({'hint': questions[question_id].get('hint', 'Подсказка недоступна.')})
+
+@app.route('/api/save-progress', methods=['POST'])
+def save_progress():
+    """Сохраняет прогресс пользователя на сервере"""
+    data = request.json
+    user_id = data.get('user_id', '').strip()
+    
+    if not user_id:
+        return jsonify({'error': 'User ID required'}), 400
+    
+    progress_data = {
+        'user_id': user_id,
+        'current_index': data.get('current_index', 0),
+        'user_answers': data.get('user_answers', {}),
+        'question_timers': data.get('question_timers', {}),
+        'timestamp': datetime.now().isoformat()
+    }
+    
+    # Загружаем существующие данные прогресса
+    try:
+        if os.path.exists(PROGRESS_FILE):
+            with open(PROGRESS_FILE, 'r', encoding='utf-8') as f:
+                all_progress = json.load(f)
+        else:
+            all_progress = {}
+    except (FileNotFoundError, json.JSONDecodeError):
+        all_progress = {}
+    
+    # Сохраняем прогресс для данного пользователя
+    all_progress[user_id] = progress_data
+    
+    with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(all_progress, f, ensure_ascii=False, indent=2)
+    
+    return jsonify({'success': True})
+
+@app.route('/api/get-progress/<user_id>', methods=['GET'])
+def get_progress(user_id):
+    """Получает сохраненный прогресс пользователя"""
+    try:
+        if not os.path.exists(PROGRESS_FILE):
+            return jsonify({'progress': None})
+        
+        with open(PROGRESS_FILE, 'r', encoding='utf-8') as f:
+            all_progress = json.load(f)
+        
+        progress = all_progress.get(user_id)
+        
+        if progress:
+            # Проверяем что прогресс не старше 24 часов
+            timestamp = datetime.fromisoformat(progress['timestamp'])
+            hours_passed = (datetime.now() - timestamp).total_seconds() / 3600
+            
+            if hours_passed < 24:
+                return jsonify({'progress': progress})
+        
+        return jsonify({'progress': None})
+    except (FileNotFoundError, json.JSONDecodeError):
+        return jsonify({'progress': None})
 
 @app.route('/api/result', methods=['POST'])
 def calculate_result():

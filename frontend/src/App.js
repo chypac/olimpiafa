@@ -26,9 +26,65 @@ function App() {
   const [userId, setUserId] = useState('');
   const [showIdForm, setShowIdForm] = useState(true);
 
-  // Устанавливаем фоновое изображение
+  // Функция сохранения прогресса в localStorage и на сервере
+  const saveProgress = async () => {
+    const progress = {
+      userId,
+      currentIndex,
+      userAnswers,
+      questionTimers,
+      timestamp: Date.now()
+    };
+    localStorage.setItem('quizProgress', JSON.stringify(progress));
+    
+    // Также сохраняем на сервере (без await чтобы не блокировать UI)
+    if (userId) {
+      try {
+        await axios.post(`${API_URL}/save-progress`, {
+          user_id: userId,
+          current_index: currentIndex,
+          user_answers: userAnswers,
+          question_timers: questionTimers
+        });
+      } catch (error) {
+        console.error('Ошибка сохранения прогресса на сервере:', error);
+      }
+    }
+  };
+
+  // Функция восстановления прогресса из localStorage
+  const restoreProgress = () => {
+    const saved = localStorage.getItem('quizProgress');
+    if (saved) {
+      try {
+        const progress = JSON.parse(saved);
+        // Проверяем что прогресс не старше 24 часов
+        const hoursPassed = (Date.now() - progress.timestamp) / (1000 * 60 * 60);
+        if (hoursPassed < 24 && progress.userId) {
+          setUserId(progress.userId);
+          setCurrentIndex(progress.currentIndex || 0);
+          setUserAnswers(progress.userAnswers || {});
+          setQuestionTimers(progress.questionTimers || {});
+          setShowIdForm(false);
+          return true;
+        }
+      } catch (e) {
+        console.error('Ошибка восстановления прогресса:', e);
+      }
+    }
+    return false;
+  };
+
+  // Функция очистки прогресса
+  const clearProgress = () => {
+    localStorage.removeItem('quizProgress');
+  };
+
+  // Устанавливаем фоновое изображение и восстанавливаем прогресс
   useEffect(() => {
     document.body.style.backgroundImage = `url(${backgroundImage})`;
+    // Пытаемся восстановить прогресс при загрузке
+    restoreProgress();
     return () => {
       document.body.style.backgroundImage = '';
     };
@@ -83,6 +139,13 @@ function App() {
     }
   }, [currentIndex, questions, userAnswers]);
 
+  // Автосохранение при изменении ответов или таймеров
+  useEffect(() => {
+    if (!showIdForm && questions.length > 0) {
+      saveProgress();
+    }
+  }, [userAnswers, questionTimers, currentIndex]);
+
   const handleAutoSubmit = () => {
     // Автоматическая отправка при истечении времени
     const currentQuestion = questions[currentIndex];
@@ -107,6 +170,8 @@ function App() {
       ...prev,
       [currentQuestion.id]: currentAnswer
     }));
+    // Сохраняем прогресс в localStorage
+    saveProgress();
   };
 
   const showHint = async () => {
@@ -124,6 +189,7 @@ function App() {
     if (currentIndex > 0) {
       saveCurrentAnswer(); // Сохраняем ответ перед переходом
       setCurrentIndex(currentIndex - 1);
+      saveProgress(); // Сохраняем прогресс
     }
   };
 
@@ -131,6 +197,7 @@ function App() {
     if (currentIndex < questions.length - 1) {
       saveCurrentAnswer(); // Сохраняем ответ перед переходом
       setCurrentIndex(currentIndex + 1);
+      saveProgress(); // Сохраняем прогресс
     }
   };
 
@@ -149,6 +216,8 @@ function App() {
       });
       setResult(response.data);
       setShowResult(true);
+      // Очищаем прогресс после завершения теста
+      clearProgress();
     } catch (error) {
       console.error('Ошибка расчета результата:', error);
     }
@@ -172,6 +241,8 @@ function App() {
       if (response.data.valid) {
         setShowIdForm(false);
         setLoading(true);
+        // Сохраняем ID в прогресс
+        saveProgress();
       } else {
         alert(response.data.message);
       }
@@ -303,7 +374,15 @@ function App() {
             className="answer-input"
             placeholder="Введите ваш ответ..."
             value={currentAnswer}
-            onChange={(e) => setCurrentAnswer(e.target.value)}
+            onChange={(e) => {
+              setCurrentAnswer(e.target.value);
+              // Автосохранение при вводе
+              const currentQuestion = questions[currentIndex];
+              setUserAnswers(prev => ({
+                ...prev,
+                [currentQuestion.id]: e.target.value
+              }));
+            }}
           />
 
           {/* Buttons */}
