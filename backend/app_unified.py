@@ -439,6 +439,28 @@ def calculate_result():
         'percent': round(percent, 1)
     })
 
+@app.route('/api/admin/sessions', methods=['GET'])
+def get_admin_sessions():
+    """Получить активные сессии и использованные ID для админ-панели"""
+    sessions = load_active_sessions()
+    sessions = clean_dead_sessions(sessions)
+    used_ids = load_used_ids()
+    
+    active_list = []
+    for user_id, timestamp in sessions.items():
+        active_list.append({
+            'user_id': user_id,
+            'timestamp': timestamp.isoformat(),
+            'duration': str(datetime.now() - timestamp).split('.')[0]  # Форматируем длительность
+        })
+    
+    return jsonify({
+        'active_sessions': active_list,
+        'used_ids': list(used_ids),
+        'total_active': len(active_list),
+        'total_used': len(used_ids)
+    })
+
 @app.route('/api/results/download', methods=['GET'])
 def download_results():
     """Скачать результаты в CSV"""
@@ -482,6 +504,11 @@ def get_stats():
 def results_viewer():
     """Отдает страницу просмотра результатов"""
     return send_file('results_viewer.html')
+
+@app.route('/admin.html')
+def admin_panel():
+    """Отдает админ-панель"""
+    return send_file('admin.html')
 
 # Serve React App
 @app.route('/')

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель - IT Спринт</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 32px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-size: 32px;
+            color: #1a1a1a;
+            margin-bottom: 16px;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h2 {
+            font-size: 24px;
+            color: #1a1a1a;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .badge-danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .session-item {
+            padding: 16px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .session-item:last-child {
+            border-bottom: none;
+        }
+
+        .session-info {
+            flex: 1;
+        }
+
+        .session-id {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .session-time {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .id-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 8px;
+        }
+
+        .id-badge {
+            padding: 8px;
+            background: #f8f9ff;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 48px;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #f0f0f0;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .empty {
+            text-align: center;
+            padding: 32px;
+            color: #999;
+        }
+
+        .pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 Админ-панель олимпиады</h1>
+            <div class="buttons">
+                <button class="btn-primary" onclick="loadData()">🔄 Обновить</button>
+                <button class="btn-secondary" onclick="window.location.href='/results_viewer.html'">📊 Результаты</button>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="activeCount">-</div>
+                <div class="stat-label">🟢 Активных сейчас</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="usedCount">-</div>
+                <div class="stat-label">✅ Завершили тест</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalCount">-</div>
+                <div class="stat-label">📝 Всего ID</div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>
+                    🟢 Активные сессии
+                    <span class="badge badge-success pulse" id="activeBadge">0</span>
+                </h2>
+                <div id="activeSessions"></div>
+            </div>
+
+            <div class="card">
+                <h2>
+                    ✅ Использованные ID
+                    <span class="badge badge-danger" id="usedBadge">0</span>
+                </h2>
+                <div id="usedIds"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://olimpiafa.onrender.com/api';
+
+        async function loadData() {
+            try {
+                const response = await fetch(`${API_URL}/admin/sessions`);
+                const data = await response.json();
+                
+                displayStats(data);
+                displayActiveSessions(data.active_sessions);
+                displayUsedIds(data.used_ids);
+            } catch (error) {
+                console.error('Ошибка:', error);
+            }
+        }
+
+        function displayStats(data) {
+            document.getElementById('activeCount').textContent = data.total_active;
+            document.getElementById('usedCount').textContent = data.total_used;
+            document.getElementById('totalCount').textContent = 80; // Всего ID
+            document.getElementById('activeBadge').textContent = data.total_active;
+            document.getElementById('usedBadge').textContent = data.total_used;
+        }
+
+        function displayActiveSessions(sessions) {
+            const container = document.getElementById('activeSessions');
+            
+            if (!sessions || sessions.length === 0) {
+                container.innerHTML = '<div class="empty">Нет активных сессий</div>';
+                return;
+            }
+
+            let html = '';
+            sessions.forEach(session => {
+                html += `
+                    <div class="session-item">
+                        <div class="session-info">
+                            <div class="session-id">ID: ${session.user_id}</div>
+                            <div class="session-time">⏱️ ${session.duration}</div>
+                        </div>
+                        <span class="badge badge-success">Онлайн</span>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function displayUsedIds(ids) {
+            const container = document.getElementById('usedIds');
+            
+            if (!ids || ids.length === 0) {
+                container.innerHTML = '<div class="empty">Нет завершенных тестов</div>';
+                return;
+            }
+
+            let html = '<div class="id-list">';
+            ids.forEach(id => {
+                html += `<div class="id-badge">${id}</div>`;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        // Загрузка при открытии
+        loadData();
+
+        // Автообновление каждые 10 секунд
+        setInterval(loadData, 10000);
+    </script>
+</body>
+</html>
