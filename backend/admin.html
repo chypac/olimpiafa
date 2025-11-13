@@ -226,6 +226,7 @@
             <div class="buttons">
                 <button class="btn-primary" onclick="loadData()">🔄 Обновить</button>
                 <button class="btn-secondary" onclick="window.location.href='/results_viewer.html'">📊 Результаты</button>
+                <button class="btn-secondary" onclick="clearResults()" style="background: #ff4444; color: white;">🗑️ Очистить результаты</button>
             </div>
         </div>
 
@@ -264,7 +265,7 @@
     </div>
 
     <script>
-        const API_URL = 'https://it-sprint.onrender.com/api';
+        const API_URL = '/api';
 
         async function loadData() {
             try {
@@ -324,6 +325,29 @@
             });
             html += '</div>';
             container.innerHTML = html;
+        }
+
+        async function clearResults() {
+            if (!confirm('⚠️ Вы уверены? Это удалит ВСЕ результаты и использованные ID!')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/admin/clear-results`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ Результаты очищены!');
+                    loadData();
+                } else {
+                    alert('❌ Ошибка: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                alert('❌ Ошибка очистки результатов');
+            }
         }
 
         // Загрузка при открытии

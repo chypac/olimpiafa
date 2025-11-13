@@ -461,6 +461,35 @@ def get_admin_sessions():
         'total_used': len(used_ids)
     })
 
+@app.route('/api/admin/clear-results', methods=['POST'])
+def clear_results():
+    """Очистить все результаты и использованные ID"""
+    try:
+        # Очищаем used_ids.txt
+        with open(USED_IDS_FILE, 'w', encoding='utf-8') as f:
+            f.write('# Здесь будут храниться использованные ID\n')
+        
+        # Очищаем active_sessions.txt
+        with open(ACTIVE_SESSIONS_FILE, 'w', encoding='utf-8') as f:
+            f.write('')
+        
+        # Пересоздаем results.csv с заголовком
+        with open(RESULTS_FILE, 'w', encoding='utf-8-sig', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['Дата/Время', 'ID Пользователя', 'Баллы', 'Макс. баллы', 'Процент', 'Время', 'Детали ответов'])
+        
+        # Очищаем results.json
+        with open(RESULTS_JSON_FILE, 'w', encoding='utf-8') as f:
+            json.dump([], f)
+        
+        # Очищаем progress.json
+        with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
+            json.dump({}, f)
+        
+        return jsonify({'success': True, 'message': 'Все данные очищены'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @app.route('/api/results/download', methods=['GET'])
 def download_results():
     """Скачать результаты в CSV"""
